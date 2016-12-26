@@ -1,0 +1,10 @@
+{
+  "MaxProcess":1,
+  "DataPath":"./data",
+  "Redis":"127.0.0.1:6379",
+  "Metric":{
+    "base":"base-LOCAL_BAND_IN.base-LOCAL_BAND_OUT.base-LOCAL_CONN_COUNT",
+    "FC":"FC-RESPONSE_TIME"
+  }
+
+}
