@@ -88,22 +88,22 @@ func (self *NGCrawler) readWorker() {
         if self.quit {
             break
         }
-
-        dvname, _:= redis.String(redisClient.Do("rpop", "request"))
-        if dvname == "" {
-            time.Sleep(time.Second)
-            continue
-        }
-        fmt.Println("#Receive Device ", dvname)
-        dv, _ := redis.StringMap(redisClient.Do("hgetall", dvname))
-        if dv == nil || len(dv) < 2 {
-            continue
-        }
+        var dv map[string]string
         select {
         case self.ch<-dv:
+            dvname, _:= redis.String(redisClient.Do("rpop", "request"))
+            if dvname == "" {
+                time.Sleep(time.Second)
+                continue
+            }
+            fmt.Println("#Receive Device ", dvname)
+            dv, _ := redis.StringMap(redisClient.Do("hgetall", dvname))
+            if dv == nil || len(dv) < 2 {
+                continue
+            }
         default:
             fmt.Println("channel full")
-            time.Sleep(10*time.Second)
+            time.Sleep(1*time.Second)
         }
 
 
