@@ -1,13 +1,10 @@
 package main
 
-//import "mypkg"
 import "github.com/garyburd/redigo/redis"
 import "os"
 import "io/ioutil"
 import "encoding/json"
-import (
-    "fmt"
-)
+import "fmt"
 
 //type dev struct {
 //    name string `json:"devName"`
