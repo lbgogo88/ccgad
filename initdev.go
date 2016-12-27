@@ -32,12 +32,23 @@ func main() {
     var alldev []map[string]interface{}
 
     _ = json.Unmarshal(body, &alldev)
-    r, _ := redis.Dial("tcp", "127.0.0.1:6379")
+    r, _ := redis.Dial("tcp", "192.168.8.198:6379")
+    fmt.Println(len(alldev))
+
     for _, d := range alldev {
         d["name"] = d["devName"]
-        _, _ = r.Do("hmset", redis.Args{}.Add(d["devName"]).AddFlat(d)...)
-        _, _ = r.Do("lpush", "request",d["name"])
-        fmt.Println(d["devDepartment"])
+        if dv, _ := redis.StringMap(r.Do("hgetall", d["name"])); dv != nil {
+            if _, ok := dv["name"]; !ok {
+                _, err := r.Do("hmset", redis.Args{}.Add(d["devName"]).AddFlat(d)...)
+                if err != nil {
+                    fmt.Println(err)
+                }
+                _, _ = r.Do("lpush", "request", d["name"])
+            } else {
+                fmt.Println("exists ", d["name"])
+            }
+        }
+
     }
 }
 

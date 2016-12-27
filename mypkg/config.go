@@ -12,6 +12,7 @@ import (
 type Config struct {
     DataPath string `json:"DataPath"`
     MaxProcess int `json:"MaxProcess"`
+    HttpMaxTime int `json:"HttpMaxTime"`
     Redis string `json:"Redis"`
     Metric map[string]string `json:"Metric"`
 }

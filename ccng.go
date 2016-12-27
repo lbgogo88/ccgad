@@ -1,11 +1,10 @@
 package main
 
-//import "mypkg"
-import "os"
 import (
-    "os/signal"
-    "fmt"
-    "mypkg"
+	"os"
+	"os/signal"
+	"fmt"
+	"./mypkg"
 )
 
 func main() {
@@ -29,7 +28,7 @@ func main() {
         done <- true
     }()
     <-done
-    crawler.Quit()
+    crawler.Close()
     fmt.Printf("Quit %d\n",os.Getpid())
 }
 
