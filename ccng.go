@@ -11,7 +11,7 @@ func main() {
     cSignal := make(chan os.Signal,1)
     done := make(chan bool, 1)
     signal.Notify(cSignal)
-    cfg,err := mypkg.ToConfig("config.json")
+    cfg,err := mypkg.ToConfig("config.yaml")
     if err != nil {
         fmt.Println(err)
         os.Exit(1)

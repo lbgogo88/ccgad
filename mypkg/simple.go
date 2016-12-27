@@ -26,12 +26,8 @@ func (self *NGCrawler) Close() {
     self.waitgroup.Wait()
 }
 
-func (self *NGCrawler) getReids() redis.Conn {
-    r, error := redis.Dial("tcp", self.Cfg.Redis)
-    if error != nil {
-        fmt.Println(error)
-    }
-    return r
+func (self *NGCrawler) getReids() (redis.Conn,error) {
+    return redis.Dial("tcp", self.Cfg.Redis,redis.DialConnectTimeout(500*time.Millisecond))
 }
 
 
@@ -42,7 +38,7 @@ func (self *NGCrawler) Run() {
     maxProcess := self.Cfg.MaxProcess
 
     fmt.Println(maxProcess)
-    for i := 0; i < maxProcess; i++ {
+    for i := int64(0); i < maxProcess; i++ {
         go self.readWorker()
     }
 
@@ -53,8 +49,6 @@ func (self *NGCrawler) readWorker() {
     self.waitgroup.Add(1)
     defer self.waitgroup.Done()
 
-    redisClient := self.getReids()
-    defer redisClient.Close()
     httpMaxTime := self.Cfg.HttpMaxTime
     httpClient := &http.Client{
         Transport: &http.Transport{
@@ -71,10 +65,23 @@ func (self *NGCrawler) readWorker() {
         Timeout: time.Duration(httpMaxTime) * time.Second,
     }
 
+    var redisClient redis.Conn = nil
+    var err error = nil
+
+
     for {
         if self.quit {
             break
         }
+        if redisClient == nil {
+            redisClient, err = self.getReids()
+            if err != nil {
+                fmt.Println(err)
+                time.Sleep(5 * time.Second)
+                continue
+            }
+        }
+
         var dv map[string]string
         dvname, _:= redis.String(redisClient.Do("rpop", "request"))
         if dvname == "" {
