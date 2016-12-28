@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"io/ioutil"
 	"encoding/json"
-	"errors"
-    "bytes"
 )
 type Worker struct {
     Context     *NGCrawler
@@ -30,7 +28,7 @@ func (self *Worker) Run() {
         if self.Context.quit {
             break
         }
-        if self.Redis == nil {
+        if self.Redis == nil || self.Redis.Err() != nil {
             self.Redis, err = GetRedis(self.Cfg)
             if err != nil {
                 fmt.Println(err)
@@ -114,55 +112,13 @@ func (self *Worker) readNG(dv map[string]string) error{
     return err
 }
 
-func (self *Worker) handleJson(j map[string]interface{}, app string, dv map[string]string) error{
-    var err error = errors.New("failed")
+func (self *Worker) handleJson(j map[string]interface{}, app string, dv map[string]string) {
     for metric, v := range j[app].(map[string]interface{}) {
-        var t interface{}
-        t = v.(map[string]interface{})["step"]
-        if t == nil {
-            break
+        if m, err := NGM(dv, metric, v.(map[string]interface{})) ; err == nil {
+            resp, err := http.Post("http://localhost:8086/write?db=mydb","", m.Buffer())
+            fmt.Println(resp,err)
         }
-        step := int64(t.(float64))
-
-        t = v.(map[string]interface{})["etime"]
-        if t == nil {
-            break
-        }
-        etime := int64(t.(float64))
-
-        t = v.(map[string]interface{})["stime"]
-        if t == nil {
-            break
-        }
-        stime := int64(t.(float64))
-        t = v.(map[string]interface{})["val"]
-        if t == nil {
-            break
-        }
-        valTmp := t.([]interface{})
-        //val := make([]float64, len(valTmp))
-        buf := new(bytes.Buffer)
-
-        for i, v := range valTmp {
-            if v.(string) == "" {
-                v = "0"
-            }
-		    if v,err = strconv.ParseFloat(v.(string),64); err == nil {
-                ts := (stime + int64(i)*step) * 1000000000
-                s := fmt.Sprintf("%s,device=%s value=%f %d\n", metric, dv["name"], v, ts)
-                buf.WriteString(s)
-            } else {
-                fmt.Println(err)
-            }
-            time.Unix(etime, 0).String()
-        }
-        resp, err := http.Post("http://localhost:8086/write?db=mydb","", buf)
-
-        fmt.Println(resp)
-        fmt.Println(err)
-        err = nil
     }
-    return err
 }
 
 
