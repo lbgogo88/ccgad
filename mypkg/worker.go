@@ -122,7 +122,7 @@ func (self *Worker) SaveJson(bytes []byte, dv map[string]string) (error) {
                 fmt.Printf("Invalid metric %s %s %s %s\n", dv["name"], app, measurementName, msg)
                 break
             }
-            NGM(dv, measurementName, v.(map[string]interface{})).Save()
+            NGM(self.Cfg, dv, measurementName, v.(map[string]interface{})).Save()
         }
     }
     return nil

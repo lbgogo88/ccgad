@@ -1,8 +1,6 @@
 package mypkg
 
 import (
-	//"time"
-	//"fmt"
 	"strconv"
 	"errors"
 	"bytes"
@@ -18,34 +16,35 @@ type NGMeasurement struct {
 	Step  int64
 	Val   []float64
 	Err	  error
+	Cfg   *Config
 }
 
 
-func (m *NGMeasurement) Save() (*NGMeasurement, error){
-	if m.Err != nil {
-		return m,m.Err
+func (self *NGMeasurement) Save() (*NGMeasurement, error){
+	if self.Err != nil {
+		return self,self.Err
 	}
 	buf := new(bytes.Buffer)
-	for i := len(m.Val) - 1; i>=0; i-- {
-		tsSecond := m.STime + int64(i)*m.Step
-		if m.ETime - tsSecond > 3600 {
+	for i := len(self.Val) - 1; i>=0; i-- {
+		tsSecond := self.STime + int64(i)*self.Step
+		if self.ETime - tsSecond > 3600 {
 			break
 		}
 		ts := tsSecond * 1000000000
-		s := fmt.Sprintf("%s,device=%s value=%f %d\n", m.Name, m.Device["name"], m.Val[i], ts)
+		s := fmt.Sprintf("%s,device=%s value=%f %d\n", self.Name, self.Device["name"], self.Val[i], ts)
 		buf.WriteString(s)
 	}
 
-	resp, err := http.Post("http://localhost:8086/write?db=mydb","", buf)
+	resp, err := http.Post(self.Cfg.InfluxDB,"", buf)
 	if err != nil || resp.StatusCode != 204 {
-		m.Err = errors.New("save failed")
+		self.Err = errors.New("save failed")
 	}
-	return m,m.Err
+	return self,self.Err
 
 }
 
-func NGM(dv map[string]string, mname string, v map[string]interface{}) (*NGMeasurement) {
-	m := &NGMeasurement{Device:dv,Name:mname,Err:nil}
+func NGM(cfg *Config, dv map[string]string, mname string, v map[string]interface{}) (*NGMeasurement) {
+	m := &NGMeasurement{Device:dv,Name:mname,Cfg: cfg,Err:nil}
 	for key, val := range(v) {
 		if val == nil {
 			m.Err = errors.New("val is nil")

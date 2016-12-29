@@ -13,6 +13,8 @@ type Config struct {
     HttpMaxTime int64 `yaml:"HttpMaxTime"`
     Redis string `yaml:"Redis"`
     Metric string `yaml:"Metric"`
+	InfluxDB string `yaml:"InfluxDB"`
+
 }
 
 func ToConfig(cfgPath string) (cfg *Config, err error){
