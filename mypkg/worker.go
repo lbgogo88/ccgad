@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"io/ioutil"
 	"encoding/json"
+    "errors"
 )
 type Worker struct {
     Context     *NGCrawler
@@ -23,12 +24,15 @@ func (self *Worker) Run() {
     defer self.Context.waitgroup.Done()
 
     var err error = nil
+    var cntFails int = 0
+    var cntSleep int = 0
 
     for {
         if self.Context.quit {
             break
         }
         if self.Redis == nil || self.Redis.Err() != nil {
+            cntFails++
             self.Redis, err = GetRedis(self.Cfg)
             if err != nil {
                 fmt.Println(err)
@@ -36,13 +40,17 @@ func (self *Worker) Run() {
                 continue
             }
         }
-
+        cntFails = 0
         dvname, _:= redis.String(self.Redis.Do("rpop", "request"))
         if dvname == "" {
-            fmt.Println("# have a sleep")
+            cntSleep++
+            if cntSleep % 60 == 0 {
+                fmt.Println("nothing to do, have a sleep")
+            }
             time.Sleep(time.Second)
             continue
         }
+        cntSleep = 0
         self.Do(dvname)
     }
     fmt.Println("read out")
@@ -51,19 +59,25 @@ func (self *Worker) Run() {
 
 func (self *Worker) Do(dvname string) {
     dv, _ := redis.StringMap(self.Redis.Do("hgetall", dvname))
-    if dv == nil || dv["status"] != "OPEN" {
+    if dv == nil {
+        return
+    }
+    if dv["status"] != "OPEN" {
+        self.Redis.Do("hmset", dv["name"], "last", int(time.Now().Unix()), "state", "NULL", "failed", 0)
         return
     }
 
-    if v,err := strconv.Atoi(dv["failed"]); err == nil && v > 1 {
-        return
+    if v,err := strconv.Atoi(dv["failed"]); err == nil && v > 5 {
         fmt.Println("# dev failed before  ", dvname)
+        return
     }
 
     if err := self.readNG(dv); err != nil {
+        fmt.Printf("Failed %s %s\n",dv["name"],dv["ip"])
         self.Redis.Do("hincrby", dv["name"], "failed", 1)
         self.Redis.Do("hmset", dv["name"], "last", int(time.Now().Unix()), "state", "NULL")
     } else {
+        fmt.Printf("Success %s %s\n",dv["name"],dv["ip"])
         self.Redis.Do("hmset", dv["name"], "last", int(time.Now().Unix()), "state", "NULL", "failed", 0)
     }
 
@@ -77,48 +91,47 @@ func (self *Worker) readNG(dv map[string]string) error{
     var response *http.Response
     var body []byte
 
-    for app, metric := range self.Cfg.Metric {
-        url := fmt.Sprintf("http://%s:21900/Rrd/%s/%s/daily", dv["ip"], dv["name"], metric)
+    url := fmt.Sprintf("http://%s:21900/Rrd/%s/%s/daily", dv["ip"], dv["name"], self.Cfg.Metric)
 
-        request, err = http.NewRequest("GET", url, nil)
-        if err != nil {
-            break
-        }
-        response, err = self.Http.Do(request)
-        if err != nil {
-            fmt.Println("Err Connection: ",err)
-            break
-        }
-
-        body, err = ioutil.ReadAll(response.Body)
-        if err != nil {
-            fmt.Println("Err Read: ",err)
-            break
-        }
-        _, body, _ = dec.Translate(body, true)
-        var j map[string]interface{}
-        if err = json.Unmarshal(body, &j); err != nil {
-            panic(err)
-            fmt.Println("Err JSON: ", err)
-            break
-        }
-
-        if _, ok := j["msg"]; ok {
-            fmt.Printf("Err Data: %s %s %s\n", dv["name"], app, j["msg"])
-            continue
-        }
-        self.handleJson(j,app,dv)
+    request, err = http.NewRequest("GET", url, nil)
+    if err != nil {
+        return err
     }
-    return err
+    response, err = self.Http.Do(request)
+    if err != nil {
+        return err
+    }
+
+    body, err = ioutil.ReadAll(response.Body)
+    if err != nil {
+        return err
+    }
+    _, body, _ = dec.Translate(body, true)
+    var j map[string]interface{}
+    if err = json.Unmarshal(body, &j); err != nil {
+        panic(err)
+        return err
+    }
+    return self.handleJson(j,dv)
 }
 
-func (self *Worker) handleJson(j map[string]interface{}, app string, dv map[string]string) {
-    for metric, v := range j[app].(map[string]interface{}) {
-        if m, err := NGM(dv, metric, v.(map[string]interface{})) ; err == nil {
-            resp, err := http.Post("http://localhost:8086/write?db=mydb","", m.Buffer())
-            fmt.Println(resp,err)
+func (self *Worker) handleJson(j map[string]interface{}, dv map[string]string) (error) {
+    if _, ok := j["msg"]; ok {
+        return errors.New(fmt.Sprintf("Err Data: %s %s %s\n", dv["name"], j["msg"]))
+    }
+    for app, metric := range j {
+        if _, ok := metric.(string); ok {
+            continue
+        }
+        for measurementName, v := range metric.(map[string]interface{}) {
+            if msg, ok := v.(string); ok {
+                fmt.Printf("Invalid metric %s %s %s %s\n", dv["name"], app, measurementName, msg)
+                break
+            }
+            NGM(dv, measurementName, v.(map[string]interface{})).Save()
         }
     }
+    return nil
 }
 
 

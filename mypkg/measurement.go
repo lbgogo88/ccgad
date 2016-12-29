@@ -7,6 +7,7 @@ import (
 	"errors"
 	"bytes"
 	"fmt"
+	"net/http"
 )
 
 type NGMeasurement struct {
@@ -16,61 +17,65 @@ type NGMeasurement struct {
 	ETime int64
 	Step  int64
 	Val   []float64
+	Err	  error
 }
 
-func (m *NGMeasurement) Buffer() *bytes.Buffer {
+
+func (m *NGMeasurement) Save() (*NGMeasurement, error){
+	if m.Err != nil {
+		return m,m.Err
+	}
 	buf := new(bytes.Buffer)
-	for i,v := range m.Val {
-		ts := (m.STime +int64(i)*m.Step) * 1000000000
-		s := fmt.Sprintf("%s,device=%s value=%f %d\n", m.Name, m.Device["name"], v, ts)
+	for i := len(m.Val) - 1; i>=0; i-- {
+		tsSecond := m.STime + int64(i)*m.Step
+		if m.ETime - tsSecond > 3600 {
+			break
+		}
+		ts := tsSecond * 1000000000
+		s := fmt.Sprintf("%s,device=%s value=%f %d\n", m.Name, m.Device["name"], m.Val[i], ts)
 		buf.WriteString(s)
 	}
-	return buf
+
+	resp, err := http.Post("http://localhost:8086/write?db=mydb","", buf)
+	if err != nil || resp.StatusCode != 204 {
+		m.Err = errors.New("save failed")
+	}
+	return m,m.Err
+
 }
 
-
-func NGM(dv map[string]string, mname string, v map[string]interface{}) (*NGMeasurement, error) {
-	m := &NGMeasurement{Device:dv,Name:mname}
-
-	var t interface{}
-	t = v["step"]
-	if t == nil {
-		return nil, errors.New("step")
-	}
-	m.Step = int64(t.(float64))
-
-
-	t = v["etime"]
-	if t == nil {
-		return nil, errors.New("etime")
-	}
-	m.ETime = int64(t.(float64))
-
-	t = v["stime"]
-	if t == nil {
-		return nil, errors.New("stime")
-	}
-	m.STime = int64(t.(float64))
-
-	t = v["val"]
-	if t == nil {
-		return nil, errors.New("val")
-	}
-
-	valTmp := t.([]interface{})
-	m.Val = make([]float64, len(valTmp))
-
-	for i, v := range valTmp {
-		if v.(string) == "" {
-			v = "0"
+func NGM(dv map[string]string, mname string, v map[string]interface{}) (*NGMeasurement) {
+	m := &NGMeasurement{Device:dv,Name:mname,Err:nil}
+	for key, val := range(v) {
+		if val == nil {
+			m.Err = errors.New("val is nil")
+			break
 		}
-		if v,err := strconv.ParseFloat(v.(string),64); err == nil {
-			m.Val[i] = v
-		} else {
-			return nil, errors.New("val")
+		switch key {
+		case "step":
+			m.Step = int64(val.(float64))
+		case "etime":
+			m.ETime = int64(val.(float64))
+		case "stime":
+			m.STime = int64(val.(float64))
+		case "val":
+			valTmp := val.([]interface{})
+			m.Val = make([]float64, len(valTmp))
+			for i, v := range valTmp {
+				if v.(string) == "" {
+					v = "0"
+				}
+				if v, err := strconv.ParseFloat(v.(string), 64); err == nil {
+					m.Val[i] = v
+				} else {
+					m.Err = err
+					break
+				}
+			}
+		}
+		if m.Err != nil {
+			break
 		}
 	}
-
-	return m,nil
-
+	return m
 }

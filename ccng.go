@@ -16,11 +16,11 @@ func main() {
         fmt.Println(err)
         os.Exit(1)
     }
+    fmt.Printf("Start %d\n", os.Getpid())
 
     crawler := &mypkg.NGCrawler{Cfg:cfg}
     crawler.Run()
 
-    fmt.Printf("Start %d\n", os.Getpid())
 
     go func() {
         sig := <-cSignal
