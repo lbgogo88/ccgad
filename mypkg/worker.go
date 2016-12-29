@@ -62,29 +62,24 @@ func (self *Worker) Do(dvname string) {
     if dv == nil {
         return
     }
-    if dv["status"] != "OPEN" {
-        self.Redis.Do("hmset", dv["name"], "last", int(time.Now().Unix()), "state", "NULL", "failed", 0)
-        return
-    }
 
     if v,err := strconv.Atoi(dv["failed"]); err == nil && v > 5 {
         fmt.Println("# dev failed before  ", dvname)
         return
     }
 
-    if err := self.readNG(dv); err != nil {
-        fmt.Printf("Failed %s %s\n",dv["name"],dv["ip"])
-        self.Redis.Do("hincrby", dv["name"], "failed", 1)
+    if bytes, err := self.ReadNG(dv); err != nil {
+        self.Redis.Send("hincrby", dv["name"], "failed", 1)
         self.Redis.Do("hmset", dv["name"], "last", int(time.Now().Unix()), "state", "NULL")
     } else {
-        fmt.Printf("Success %s %s\n",dv["name"],dv["ip"])
+        self.SaveJson(bytes,dv)
         self.Redis.Do("hmset", dv["name"], "last", int(time.Now().Unix()), "state", "NULL", "failed", 0)
     }
 
     return
 }
 
-func (self *Worker) readNG(dv map[string]string) error{
+func (self *Worker) ReadNG(dv map[string]string) ([]byte, error) {
     dec := mahonia.NewDecoder("gbk")
     var err error = nil
     var request *http.Request
@@ -95,27 +90,26 @@ func (self *Worker) readNG(dv map[string]string) error{
 
     request, err = http.NewRequest("GET", url, nil)
     if err != nil {
-        return err
+        return nil,err
     }
     response, err = self.Http.Do(request)
     if err != nil {
-        return err
+        return nil,err
     }
 
     body, err = ioutil.ReadAll(response.Body)
     if err != nil {
-        return err
+        return nil,err
     }
     _, body, _ = dec.Translate(body, true)
-    var j map[string]interface{}
-    if err = json.Unmarshal(body, &j); err != nil {
-        panic(err)
-        return err
-    }
-    return self.handleJson(j,dv)
+    return body, nil
 }
 
-func (self *Worker) handleJson(j map[string]interface{}, dv map[string]string) (error) {
+func (self *Worker) SaveJson(bytes []byte, dv map[string]string) (error) {
+    var j map[string]interface{}
+    if err := json.Unmarshal(bytes, &j); err != nil {
+        return err
+    }
     if _, ok := j["msg"]; ok {
         return errors.New(fmt.Sprintf("Err Data: %s %s %s\n", dv["name"], j["msg"]))
     }
