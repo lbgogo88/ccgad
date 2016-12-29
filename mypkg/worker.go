@@ -68,6 +68,10 @@ func (self *Worker) Do(dvname string) {
         return
     }
 
+    if v,err := strconv.Atoi(dv["last"]); err == nil && int(time.Now().Unix()) - v < 300 {
+        return
+    }
+
     if bytes, err := self.ReadNG(dv); err != nil {
         self.Redis.Send("hincrby", dv["name"], "failed", 1)
         self.Redis.Do("hmset", dv["name"], "last", int(time.Now().Unix()), "state", "NULL")

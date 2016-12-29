@@ -2,7 +2,6 @@ package mypkg
 
 
 import (
-    "fmt"
     "sync"
 )
 
@@ -24,7 +23,6 @@ func (self *NGCrawler) Run() {
 
     maxProcess := self.Cfg.MaxProcess
 
-    fmt.Println(maxProcess)
     for i := int64(0); i < maxProcess; i++ {
         worker := &Worker{}
         worker.Redis, _ = GetRedis(self.Cfg)
