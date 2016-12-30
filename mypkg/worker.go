@@ -16,6 +16,8 @@ type Worker struct {
     Cfg         *Config
     Http        *http.Client
     Redis       redis.Conn
+    RedisRelDevGroup       redis.Conn
+
 }
 
 func (self *Worker) Run() {
@@ -33,13 +35,14 @@ func (self *Worker) Run() {
         }
         if self.Redis == nil || self.Redis.Err() != nil {
             cntFails++
-            self.Redis, err = GetRedis(self.Cfg)
+            self.Redis, err = GetRedis(self.Cfg,0)
             if err != nil {
                 fmt.Println(err)
                 time.Sleep(5 * time.Second)
                 continue
             }
         }
+        self.RedisRelDevGroup, _ = GetRedis(self.Cfg, 2)
         cntFails = 0
         dvname, _:= redis.String(self.Redis.Do("rpop", "request"))
         if dvname == "" {
@@ -76,7 +79,8 @@ func (self *Worker) Do(dvname string) {
         self.Redis.Send("hincrby", dv["name"], "failed", 1)
         self.Redis.Do("hmset", dv["name"], "last", int(time.Now().Unix()), "state", "NULL")
     } else {
-        self.SaveJson(bytes,dv)
+        group, _ := redis.Strings(self.RedisRelDevGroup.Do("smembers", dv["name"]))
+        self.SaveJson(bytes,dv,group)
         self.Redis.Do("hmset", dv["name"], "last", int(time.Now().Unix()), "state", "NULL", "failed", 0)
     }
 
@@ -109,7 +113,7 @@ func (self *Worker) ReadNG(dv map[string]string) ([]byte, error) {
     return body, nil
 }
 
-func (self *Worker) SaveJson(bytes []byte, dv map[string]string) (error) {
+func (self *Worker) SaveJson(bytes []byte, dv map[string]string, group []string) (error) {
     var j map[string]interface{}
     if err := json.Unmarshal(bytes, &j); err != nil {
         return err
@@ -126,7 +130,7 @@ func (self *Worker) SaveJson(bytes []byte, dv map[string]string) (error) {
                 fmt.Printf("Invalid metric %s %s %s %s\n", dv["name"], app, measurementName, msg)
                 break
             }
-            NGM(self.Cfg, dv, measurementName, v.(map[string]interface{})).Save()
+            NGM(self.Cfg, dv, group, measurementName, v.(map[string]interface{})).Save()
         }
     }
     return nil

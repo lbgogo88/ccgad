@@ -25,7 +25,7 @@ func (self *NGCrawler) Run() {
 
     for i := int64(0); i < maxProcess; i++ {
         worker := &Worker{}
-        worker.Redis, _ = GetRedis(self.Cfg)
+        worker.Redis, _ = GetRedis(self.Cfg,0)
         worker.Http = GetHTTP(self.Cfg)
         worker.Cfg = self.Cfg
         worker.Context = self
