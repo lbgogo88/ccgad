@@ -10,7 +10,6 @@ import (
 type Config struct {
     DataPath string `yaml:"DataPath"`
     MaxProcess int64 `yaml:"MaxProcess"`
-    HttpMaxTime int64 `yaml:"HttpMaxTime"`
     Redis string `yaml:"Redis"`
     Metric string `yaml:"Metric"`
 	InfluxDB string `yaml:"InfluxDB"`

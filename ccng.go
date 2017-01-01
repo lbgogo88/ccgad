@@ -20,6 +20,7 @@ func main() {
 
     crawler := &mypkg.NGCrawler{Cfg:cfg}
     crawler.Run()
+    defer crawler.Close()
 
 
     go func() {
@@ -28,7 +29,6 @@ func main() {
         done <- true
     }()
     <-done
-    crawler.Close()
-    fmt.Printf("Quit %d\n",os.Getpid())
+    fmt.Printf("Wating Worker Quit %d\n",os.Getpid())
 }
 

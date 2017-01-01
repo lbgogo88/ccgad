@@ -2,10 +2,8 @@ package mypkg
 
 import (
 	"strconv"
-	"errors"
 	"bytes"
 	"fmt"
-	"net/http"
 )
 
 type NGMeasurement struct {
@@ -16,20 +14,14 @@ type NGMeasurement struct {
 	ETime int64
 	Step  int64
 	Val   []float64
-	Err	  error
-	Cfg   *Config
 }
 
 
-func (self *NGMeasurement) Save() (*NGMeasurement, error){
-	if self.Err != nil {
-		return self,self.Err
+func (self *NGMeasurement) Buffer() (*bytes.Buffer){
+	if self == nil {
+		return nil
 	}
 	buf := new(bytes.Buffer)
-	if self.Group == nil {
-		self.Group = make([]string, 1)
-		self.Group[0] = "NULL"
-	}
 	for i := len(self.Val) - 1; i>=0; i-- {
 		tsSecond := self.STime + int64(i)*self.Step
 		if self.ETime - tsSecond > 3600 {
@@ -43,20 +35,15 @@ func (self *NGMeasurement) Save() (*NGMeasurement, error){
 			buf.WriteString(s)
 		}
 	}
-
-	resp, err := http.Post(self.Cfg.InfluxDB,"", buf)
-	if err != nil || resp.StatusCode != 204 {
-		self.Err = errors.New("save failed")
-	}
-	return self,self.Err
-
+	return buf
 }
 
-func NGM(cfg *Config, dv map[string]string, group []string, mname string, v map[string]interface{}) (*NGMeasurement) {
-	m := &NGMeasurement{Device:dv, Group:group, Name:mname,Cfg: cfg,Err:nil}
-	for key, val := range(v) {
+func NGM(device *Device, mname string, metric map[string]interface{}) (*NGMeasurement, error) {
+	m := &NGMeasurement{Device:device.dv, Group:device.group, Name:mname}
+	var gerr error = nil
+	for key, val := range metric {
 		if val == nil {
-			m.Err = errors.New("val is nil")
+			gerr = fmt.Errorf("val is nil")
 			break
 		}
 		switch key {
@@ -76,15 +63,23 @@ func NGM(cfg *Config, dv map[string]string, group []string, mname string, v map[
 				if v, err := strconv.ParseFloat(v.(string), 64); err == nil {
 					m.Val[i] = v
 				} else {
-					m.Err = err
+					gerr = err
 					break
 				}
 			}
 		}
-		if m.Err != nil {
+		if gerr != nil {
 			break
 		}
 	}
 
-	return m
+	if m.Group == nil || len(m.Group) == 0 {
+		m.Group = make([]string, 1)
+		m.Group[0] = "NULL"
+	}
+
+	if gerr != nil {
+		return nil, gerr
+	}
+	return m,nil
 }

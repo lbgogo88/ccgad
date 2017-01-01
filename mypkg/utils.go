@@ -20,8 +20,8 @@ func DirExists(path string) bool{
     return finfo.IsDir()
 }
 
-func GetRedis(cfg *Config, db int) (redis.Conn,error) {
-    conn, err := redis.Dial("tcp", cfg.Redis,redis.DialConnectTimeout(500*time.Millisecond))
+func GetRedis(connstr string, db int) (redis.Conn,error) {
+    conn, err := redis.Dial("tcp", connstr,redis.DialConnectTimeout(500*time.Millisecond))
     if err != nil {
         return nil, err
     }
@@ -38,7 +38,7 @@ func GetRedis(cfg *Config, db int) (redis.Conn,error) {
     return conn, err
 
 }
-func GetHTTP(cfg *Config) (*http.Client) {
+func GetHTTP() (*http.Client) {
     return &http.Client{
         Transport: &http.Transport{
             Dial: func(netw, addr string) (net.Conn, error) {
@@ -51,6 +51,6 @@ func GetHTTP(cfg *Config) (*http.Client) {
             },
             ResponseHeaderTimeout: time.Second,
         },
-        Timeout: time.Duration(cfg.HttpMaxTime) * time.Second,
+        Timeout: 5 * time.Second,
     }
 }
